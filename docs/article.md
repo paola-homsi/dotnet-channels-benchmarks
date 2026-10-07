@@ -1,6 +1,6 @@
 # .Net Channels Performance - Benchmarks
 ## Introduction
-In the previous article [this article](https://github.com/pawla-homsi/dotnet-channels-guide) we talked about channels, what are they and how to create a channel, write to it and read from it.
+In the previous article [this article](https://github.com/paola-homsi/dotnet-channels-guide) we talked about channels, what are they and how to create a channel, write to it and read from it.
 In this article let’s talk about the more interesting stuff, their Performance!
 
 ## So, What about Performance?

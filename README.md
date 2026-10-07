@@ -1,6 +1,6 @@
 # dotnet-channels-benchmarks
 
-[![build](https://github.com/pawla-homsi/dotnet-channels-benchmarks/actions/workflows/build.yml/badge.svg)](https://github.com/pawla-homsi/dotnet-channels-benchmarks/actions/workflows/build.yml)
+[![build](https://github.com/paola-homsi/dotnet-channels-benchmarks/actions/workflows/build.yml/badge.svg)](https://github.com/paola-homsi/dotnet-channels-benchmarks/actions/workflows/build.yml)
 
 Throughput and memory measurements of `System.Threading.Channels` in .NET, using BenchmarkDotNet over 10 million messages per run.
 
@@ -24,7 +24,7 @@ Benchmark code adapted from Stephen Toub's [An Introduction to System.Threading.
 Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download). Benchmarks must run in Release mode.
 
 ```bash
-git clone https://github.com/pawla-homsi/dotnet-channels-benchmarks.git
+git clone https://github.com/paola-homsi/dotnet-channels-benchmarks.git
 cd dotnet-channels-benchmarks
 dotnet run -c Release --project NetChannelsBenchmark
 ```
