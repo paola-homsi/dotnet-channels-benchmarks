@@ -7,13 +7,13 @@ namespace NetChannelsBenchmark
     [MemoryDiagnoser]
     public class ChannelsBenchmark
     {
-        private readonly Channel<int> s_channel = Channel.CreateUnbounded<int>();
+        private readonly Channel<int> _channel = Channel.CreateUnbounded<int>();
 
         [Benchmark]
         public async Task WriteThenRead()
         {
-            ChannelWriter<int> writer = s_channel.Writer;
-            ChannelReader<int> reader = s_channel.Reader;
+            ChannelWriter<int> writer = _channel.Writer;
+            ChannelReader<int> reader = _channel.Reader;
             for (int i = 0; i < 10_000_000; i++)
             {
                 writer.TryWrite(i);
@@ -24,8 +24,8 @@ namespace NetChannelsBenchmark
         [Benchmark]
         public async Task ReadThenWrite()
         {
-            ChannelWriter<int> writer = s_channel.Writer;
-            ChannelReader<int> reader = s_channel.Reader;
+            ChannelWriter<int> writer = _channel.Writer;
+            ChannelReader<int> reader = _channel.Reader;
             for (int i = 0; i < 10_000_000; i++)
             {
                 ValueTask<int> vt = reader.ReadAsync();
