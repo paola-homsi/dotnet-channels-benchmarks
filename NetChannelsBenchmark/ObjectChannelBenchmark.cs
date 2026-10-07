@@ -5,15 +5,15 @@ using BenchmarkDotNet.Attributes;
 namespace NetChannelsBenchmark
 {
     [MemoryDiagnoser]
-    public class OjectChannelBenchmark
+    public class ObjectChannelBenchmark
     {
-        private readonly Channel<object> s_channel = Channel.CreateUnbounded<object>();
+        private readonly Channel<object> _channel = Channel.CreateUnbounded<object>();
 
         [Benchmark]
         public async Task WriteThenRead()
         {
-            ChannelWriter<object> writer = s_channel.Writer;
-            ChannelReader<object> reader = s_channel.Reader;
+            ChannelWriter<object> writer = _channel.Writer;
+            ChannelReader<object> reader = _channel.Reader;
             for (int i = 0; i < 10_000_000; i++)
             {
                 var obj = new
@@ -30,8 +30,8 @@ namespace NetChannelsBenchmark
         [Benchmark]
         public async Task ReadThenWrite()
         {
-            ChannelWriter<object> writer = s_channel.Writer;
-            ChannelReader<object> reader = s_channel.Reader;
+            ChannelWriter<object> writer = _channel.Writer;
+            ChannelReader<object> reader = _channel.Reader;
             for (int i = 0; i < 10_000_000; i++)
             {
                 var obj = new

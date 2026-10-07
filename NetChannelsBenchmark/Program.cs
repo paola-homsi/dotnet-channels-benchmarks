@@ -1,17 +1,12 @@
-﻿using System;
 using BenchmarkDotNet.Running;
 
 namespace NetChannelsBenchmark
 {
-    class Program
+    internal static class Program
     {
-        static void Main(string[] args)
-        {
-            var summary = BenchmarkRunner.Run<BigOjectChannelBenchmark>();
-
-            Console.WriteLine(summary);
-
-            Console.Read();
-        }
+        // Pick a benchmark interactively, or pass a filter, e.g.:
+        //   dotnet run -c Release -- --filter "*ObjectChannelBenchmark*"
+        private static void Main(string[] args) =>
+            BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
     }
 }

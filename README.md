@@ -1,164 +1,58 @@
-# .Net Channels Performance - Benchmarks
-## Introduction
-In the previous article [this article](https://github.com/paola-homsi/.NetChannels) we talked about channels, what are they and how to create a channel, write to it and read from it.
-In this article let’s talk about the more interesting stuff, their Performance!
+# dotnet-channels-benchmarks
 
-## So, What about Performance?
-This is the interesting part for me, all of the previous introduction and how to use Channels is interesting and everything but the real question is what about performance?
+[![build](https://github.com/paola-homsi/dotnet-channels-benchmarks/actions/workflows/build.yml/badge.svg)](https://github.com/paola-homsi/dotnet-channels-benchmarks/actions/workflows/build.yml)
 
-How much load can we put on these channels? If we’re going to use a bounded channel what is the limit?
+Throughput and memory measurements of `System.Threading.Channels` in .NET, using BenchmarkDotNet over 10 million messages per run.
 
-As much as .NET channels sound simple, but behind the scenes there is a complicated and pretty efficient written code. Let’s check that together and try some benchmarks to see how efficient channels are. I’ve taken the code samples from [this amazing blog](https://devblogs.microsoft.com/dotnet/an-introduction-to-system-threading-channels/) written by Stephen Toub and wanted to try them myself.
+## Why
 
-In the first benchmark, we’re trying to write then read an integer value 10 millions time, but in here, the write is happening before the read meaning that the read will always have an element to be read in the channel, thus the read will not have to wait and will always complete synchronously.
+Before using channels on a production request path I wanted to know their cost: how much they allocate, how synchronous and asynchronous reads compare, and what happens when the consumer falls behind.
 
-```
-private readonly Channel<int> s_channel = Channel.CreateUnbounded<int>();
+## Findings
 
-[Benchmark]
-public async Task WriteThenRead()
-{
-   ChannelWriter<int> writer = s_channel.Writer;
-   ChannelReader<int> reader = s_channel.Reader;
-   for (int i = 0; i < 10_000_000; i++)
-   {
-      writer.TryWrite(i);
-      await reader.ReadAsync();
-   }
-}
-```
+Full write-up with result tables: [docs/article.md](docs/article.md).
 
-In the second benchmark, we will try to read then write to our channel, the same 10 millions integer elements. In this benchmark the read is completed asynchronously because by the time we’re reading, there’s still no element written in the channel, so we have to wait till the write is done in order to be able to read an element
+- **The channel adds almost no allocation of its own.** With `int` messages, allocation stayed under 100 bytes per run, because `ChannelReader` and `ChannelWriter` return `ValueTask`.
+- **With objects, allocation equals the payload.** 10 million 40-byte objects allocated 381 MB, which is 10,000,000 × 40 bytes.
+- **Asynchronous reads are slower than synchronous ones.** Reading before writing forces every read to wait for a writer.
+- **A consumer reading at half the write rate is the real risk.** The unbounded channel grows, garbage collection work rises, and the run took around 10 minutes. That is the case for a bounded channel or a durable queue.
 
-```
-private readonly Channel<int> s_channel = Channel.CreateUnbounded<int>();
+Benchmark code adapted from Stephen Toub's [An Introduction to System.Threading.Channels](https://devblogs.microsoft.com/dotnet/an-introduction-to-system-threading-channels/).
 
-[Benchmark]
-public async Task ReadThenWrite()
-{
-   ChannelWriter<int> writer = s_channel.Writer;
-   ChannelReader<int> reader = s_channel.Reader;
-   for (int i = 0; i < 10_000_000; i++)
-   {
-      ValueTask<int> vt = reader.ReadAsync();
-      writer.TryWrite(i);
-      await vt;
-   }
-}
+## Quick start
+
+Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download). Benchmarks must run in Release mode.
+
+```bash
+git clone https://github.com/paola-homsi/dotnet-channels-benchmarks.git
+cd dotnet-channels-benchmarks
+dotnet run -c Release --project NetChannelsBenchmark
 ```
 
-As shown below in the results table, when reading asynchronously the performance is a bit slower which makes sense because the read takes time till it’s notified that there are new elements written to the channel.
+Pick a benchmark from the menu, or run one directly:
 
-The memory allocation in both cases did not exceed 100 Bytes, although this number was varying in different runs but it was close most of the times to these values. Based on these findings we can see that the memory allocations is actually minimal in the .NET channel implementations.
-
-![Integers benchmark results](https://github.com/paola-homsi/.NetChannelsBenchmark/blob/master/NetChannelsBenchmark/assets/firstbenckmark.png)
-
-How is this low allocation is actually achieved?
-
-If we take a look inside ChannelReader we can see that its methods return ValueTask instead of Task, which is internally a struct not a class and therefore it will be allocated on the stack not on the heap. Since we’re using integers and the channel is using ValueTask, this should explain the no allocated memory results above.
-
-```
-public abstract class ChannelReader<T>{
-   public virtual ValueTask<T> ReadAsync(CancellationToken cancellationToken = default);
-   public abstract ValueTask<bool> WaitToReadAsync(CancellationToken cancellationToken = default);
-}
-```
-Same for ChannelWriter
-
-```
-public abstract class ChannelWriter<T>{
-   public abstract ValueTask<bool> WaitToWriteAsync(CancellationToken cancellationToken = default);
-   public virtual ValueTask WriteAsync(T item, CancellationToken cancellationToken = default);
-}
+```bash
+dotnet run -c Release --project NetChannelsBenchmark -- --filter "*ObjectChannelBenchmark*"
 ```
 
+## Benchmarks
 
-However, I wanted to go a step further in this benchmark and try to write/read an object instead of just an integer, so I went ahead and created an object with a size of exactly 40 Bytes, then tried the same above benchmarks on it.
+| Class | Payload | Cases |
+|---|---|---|
+| `ChannelsBenchmark` | `int` | write then read, read then write |
+| `ObjectChannelBenchmark` | 40-byte object | write then read, read then write |
+| `BigObjectChannelBenchmark` | object with seven string fields | write then read, read then write |
 
+## Tech
 
-```
-private readonly Channel<object> s_channel = Channel.CreateUnbounded<object>();
-[Benchmark]
-public async Task WriteThenRead()
-{
-   ChannelWriter<object> writer = s_channel.Writer;
-   ChannelReader<object> reader = s_channel.Reader;
-   for (int i = 0; i < 10_000_000; i++)
-   {
-      var obj = new
-      {
-         item1 = "123",
-         item2 = "456",
-         item3 = "789"
-      };
-      writer.TryWrite(obj);
-      await reader.ReadAsync();
-   }
-}
-```
+C#, .NET 10, BenchmarkDotNet.
 
-Then I tried reading the object from the channel before writing to it, to test reading asynchronously
+## Roadmap
 
-```
-private readonly Channel<object> s_channel = Channel.CreateUnbounded<object>();
-[Benchmark]
-public async Task ReadThenWrite()
-{
-   ChannelWriter<object> writer = s_channel.Writer;
-   ChannelReader<object> reader = s_channel.Reader;
-   for (int i = 0; i < 10_000_000; i++)
-   {
-      var obj = new
-      { 
-         item1 = "123",
-         item2 = "456",
-         item3 = "789"
-      };
-      ValueTask<object> vt = reader.ReadAsync();
-      writer.TryWrite(obj);
-      await vt;
-   }
-}
-````
+- [ ] Re-run on .NET 10 and publish the new tables next to the 2022 results
+- [ ] Bounded vs unbounded, and `SingleReader` / `SingleWriter` options
+- [ ] Compare against `BlockingCollection<T>` and `ConcurrentQueue<T>` with polling
 
-The results I found were very interesting! and these numbers were consistent in every time I run the benchmark.
+## License
 
-![Objects benchmark results](https://github.com/paola-homsi/.NetChannelsBenchmark/blob/master/NetChannelsBenchmark/assets/secondbenchmark.png)
-
-So performance wise it’s still the same outcome reading asynchronously is a bit slower than reading synchronously.
-
-Now about the memory allocation, as shown in the results table, both benchmarks have allocated exactly 381 MB for the 10M objects, if we did some quick calculations we see that 40 Bytes * 10M is exactly 381.47 MB of memory. Basically nothing other than our own objects allocations!
-
-I have one more case to try, instead of reading the data immediately, I will read only half of the data and I will run the same benchmark with our 10 millions 40 Bytes objects
-```
-[Benchmark]
-public async Task WriteThenRead()
-{
-   ChannelWriter<object> writer = s_channel.Writer;
-   ChannelReader<object> reader = s_channel.Reader;
-   for (int i = 0; i < 10_000_000; i++)
-   {
-      var obj = new
-      {
-         item1 = "123",
-         item2 = "456",
-         item3 = "789"
-      };
-      writer.TryWrite(obj);
-      if(i % 2 == 0) await reader.ReadAsync();
-   }
-}
-```
-While running the benchmark the performance issue was obvious, it took about 10 minutes to finish, and here was the result of this benchmark
-
-![benchmark results](https://github.com/paola-homsi/.NetChannelsBenchmark/blob/master/NetChannelsBenchmark/assets/lastbenchmark.png)
-
-the memory allocation was the same, the actual memory usage was higher because it’s allocating the objects and keeping the objects that were not read in memory, and also the size of garbage collected data is higher here.
-
-As we can see the performance degraded so much, and in this case it was kind of an issue, but in real life if we have 10 millions objects to store in a channel (queue) and our reading performance is half of our writing rate, maybe we should consider not using channels in the first place and go for other more reliable and scalable solutions.
-
-## Summary
-I find these results very interesting because this means that the channels code itself is almost allocation free! and most of the allocation that will happen in our code is very predictable and it completely depends on the size of our object.
-
-Based on that, deciding the capacity of a channel should be more clear since we know the size of our object, the writing rate on our channel and the reading performance as well.
-
+MIT
